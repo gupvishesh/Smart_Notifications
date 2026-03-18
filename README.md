@@ -1,7 +1,5 @@
 # 🔔 Smart Notification System
 
-**🟢 Live Demo:** [https://smart-notifications-cmmyq9rs4-visheshgupta1021-1041s-projects.vercel.app/](https://smart-notifications-cmmyq9rs4-visheshgupta1021-1041s-projects.vercel.app/)
-
 A highly resilient, real-time notification engine built with **React (Vite)** and **Python (FastAPI)**. 
 
 Designed to handle continuous WebSocket connections, intelligent connection drops, offline queuing, and notification grouping—all critical components of modern scalable notification architectures.
