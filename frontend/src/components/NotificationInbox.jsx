@@ -12,7 +12,7 @@ const TYPE_MAP = {
 /**
  * NotificationInbox — filter tabs, mark-all-read, scrollable grouped list.
  */
-export default function NotificationInbox({ notifications, userId, onMarkRead, onDismiss, onMarkAllRead }) {
+export default function NotificationInbox({ notifications, userId, displayName, onMarkRead, onDismiss, onMarkAllRead }) {
   const [activeFilter, setActiveFilter] = useState('All')
 
   const filtered = notifications.filter((n) => {
@@ -28,7 +28,7 @@ export default function NotificationInbox({ notifications, userId, onMarkRead, o
       {/* Header */}
       <div className="inbox-header">
         <div>
-          <h2>Inbox</h2>
+          <h2>Inbox{displayName ? <span className="inbox-subtitle"> · {displayName}</span> : null}</h2>
           <span className="inbox-count">
             {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
           </span>

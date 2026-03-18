@@ -7,6 +7,48 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const DEFAULT_USERS = ['user_a', 'user_b', 'user_c', 'Admin']
 
+const DEFAULT_PROFILES = {
+  user_a: { name: 'Aarav' },
+  user_b: { name: 'Isha' },
+  user_c: { name: 'Kabir' },
+  Admin:  { name: 'Admin' },
+}
+
+const LS_KEY = 'sns_user_profiles_v1'
+
+function safeParse(json, fallback) {
+  try { return JSON.parse(json) } catch (_) { return fallback }
+}
+
+function loadProfiles() {
+  const stored = safeParse(localStorage.getItem(LS_KEY) || '', null)
+  return stored && typeof stored === 'object'
+    ? { ...DEFAULT_PROFILES, ...stored }
+    : { ...DEFAULT_PROFILES }
+}
+
+function saveProfiles(next) {
+  localStorage.setItem(LS_KEY, JSON.stringify(next))
+}
+
+function slugifyId(input) {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 24)
+}
+
+function initials(nameOrId) {
+  const s = (nameOrId || '').trim()
+  if (!s) return '?'
+  const parts = s.split(/\s+/).filter(Boolean)
+  const a = parts[0]?.[0] || s[0]
+  const b = parts.length > 1 ? parts[parts.length - 1][0] : (s[1] || '')
+  return (a + b).toUpperCase()
+}
+
 const NOTIFICATION_TYPES = [
   { type: 'assignment_update', label: 'Send Assignment Update', icon: '📝' },
   { type: 'message',           label: 'Send Message',           icon: '💬' },
@@ -61,6 +103,7 @@ function Toast({ toast, onDone }) {
 // ── Main App ─────────────────────────────────────────────────────────────
 export default function App() {
   const [users, setUsers]                       = useState(DEFAULT_USERS)
+  const [profiles, setProfiles]                 = useState(() => loadProfiles())
   const [selectedUser, setSelectedUser]         = useState('user_a')
   const [targetUser,   setTargetUser]           = useState('user_a')
   const [isOnline,     setIsOnline]             = useState(true)
@@ -70,15 +113,24 @@ export default function App() {
   const [sending,      setSending]              = useState(null)
   const [soundEnabled, setSoundEnabled]         = useState(false)
   const [priority,     setPriority]             = useState('normal')
-  const [newUserInput, setNewUserInput]         = useState('')
+  const [newUserName,  setNewUserName]          = useState('')
+  const [newUserId,    setNewUserId]            = useState('')
   const [addingUser,   setAddingUser]           = useState(false)
 
   const isAdmin = selectedUser === 'Admin'
+  const selectedName = profiles?.[selectedUser]?.name || selectedUser
+  const targetName = profiles?.[targetUser]?.name || targetUser
+
+  const labelForUser = useCallback((id) => {
+    const name = profiles?.[id]?.name
+    if (!name || name === id) return id
+    return `${name} (${id})`
+  }, [profiles])
 
   // ── Tab title badge ───────────────────────────────────────────────────
   useEffect(() => {
     const unread = notifications.filter((n) => !n.read && !n.dismissed).length
-    document.title = unread > 0 ? `(${unread}) Smart Notifications` : 'Smart Notifications'
+    document.title = unread > 0 ? `(${unread}) ${selectedName} · Smart Notifications` : `${selectedName} · Smart Notifications`
   }, [notifications])
 
   // ── Fetch full inbox ──────────────────────────────────────────────────
@@ -105,6 +157,15 @@ export default function App() {
         if (data.users?.length) {
           const merged = Array.from(new Set([...DEFAULT_USERS, ...data.users]))
           setUsers(merged)
+          // Ensure profiles exist for any server-known IDs (fallback name = id)
+          setProfiles((prev) => {
+            const next = { ...(prev || {}) }
+            for (const id of merged) {
+              if (!next[id]) next[id] = { name: id }
+            }
+            saveProfiles(next)
+            return next
+          })
         }
       })
       .catch(() => {})
@@ -201,8 +262,10 @@ export default function App() {
 
   // ── Add custom user ───────────────────────────────────────────────────
   const handleAddUser = async () => {
-    const uid = newUserInput.trim()
-    if (!uid || users.includes(uid)) return
+    const name = newUserName.trim()
+    const rawId = (newUserId || name).trim()
+    const uid = slugifyId(rawId)
+    if (!name || !uid || users.includes(uid)) return
     try {
       await fetch(`${API_URL}/users`, {
         method: 'POST',
@@ -210,9 +273,22 @@ export default function App() {
         body: JSON.stringify({ user_id: uid }),
       })
       setUsers((prev) => [...prev, uid])
-      setNewUserInput('')
+      setProfiles((prev) => {
+        const next = { ...(prev || {}) , [uid]: { name } }
+        saveProfiles(next)
+        return next
+      })
+      setNewUserName('')
+      setNewUserId('')
       setAddingUser(false)
+      handleUserSwitch(uid)
     } catch (e) { console.error(e) }
+  }
+
+  const handleCancelAdd = () => {
+    setAddingUser(false)
+    setNewUserName('')
+    setNewUserId('')
   }
 
   // ── User switch ───────────────────────────────────────────────────────
@@ -242,6 +318,11 @@ export default function App() {
 
         <div className="header-controls">
           {/* Logged-in user selector */}
+          <div className="user-chip" title={`Current user: ${labelForUser(selectedUser)}`}>
+            <span className="user-avatar">{initials(selectedName)}</span>
+            <span className="user-name">{selectedName}</span>
+          </div>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>As:</span>
             <select
@@ -249,29 +330,38 @@ export default function App() {
               value={selectedUser}
               onChange={(e) => handleUserSwitch(e.target.value)}
             >
-              {users.map((u) => <option key={u} value={u}>{u}</option>)}
+              {users.map((u) => <option key={u} value={u}>{labelForUser(u)}</option>)}
             </select>
           </div>
 
           {/* Add user button */}
           {addingUser ? (
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div className="add-user-form">
               <input
-                id="new-user-input"
+                id="new-user-name"
                 type="text"
-                placeholder="user_id"
-                value={newUserInput}
-                onChange={(e) => setNewUserInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddUser()}
-                style={{
-                  background: 'var(--bg-card)', border: '1px solid var(--border)',
-                  color: 'var(--text-primary)', borderRadius: 6, padding: '6px 10px',
-                  fontSize: 13, fontFamily: 'inherit', outline: 'none', width: 110,
+                placeholder="Display name (e.g., Vishesh)"
+                value={newUserName}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setNewUserName(v)
+                  if (!newUserId) setNewUserId(slugifyId(v))
                 }}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddUser()}
+                className="text-input"
                 autoFocus
               />
+              <input
+                id="new-user-id"
+                type="text"
+                placeholder="user_id (optional)"
+                value={newUserId}
+                onChange={(e) => setNewUserId(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddUser()}
+                className="text-input"
+              />
               <button className="btn-primary btn-sm" onClick={handleAddUser}>Add</button>
-              <button className="btn-secondary btn-sm" onClick={() => { setAddingUser(false); setNewUserInput('') }}>✕</button>
+              <button className="btn-secondary btn-sm" onClick={handleCancelAdd}>✕</button>
             </div>
           ) : (
             <button className="btn-secondary btn-sm" id="add-user-btn" onClick={() => setAddingUser(true)}>+ User</button>
@@ -335,12 +425,12 @@ export default function App() {
                   onChange={(e) => setTargetUser(e.target.value)}
                 >
                   {users.filter((u) => u !== 'Admin').map((u) => (
-                    <option key={u} value={u}>{u}</option>
+                    <option key={u} value={u}>{labelForUser(u)}</option>
                   ))}
                 </select>
                 {targetUser !== selectedUser && (
                   <span style={{ fontSize: 11, color: 'var(--accent-hover)' }}>
-                    Cross-user ↗
+                    Cross-user ↗ ({targetName})
                   </span>
                 )}
               </div>
@@ -415,6 +505,7 @@ export default function App() {
           <NotificationInbox
             notifications={notifications}
             userId={selectedUser}
+            displayName={selectedName}
             onMarkRead={handleMarkRead}
             onDismiss={handleDismiss}
             onMarkAllRead={handleMarkAllRead}
