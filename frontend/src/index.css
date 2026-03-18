@@ -79,75 +79,6 @@ body {
   flex-wrap: wrap;
 }
 
-/* ---- User chip (display name + avatar) ---- */
-.user-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: linear-gradient(180deg, rgba(99,102,241,0.14), rgba(99,102,241,0.06));
-}
-
-.user-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.6px;
-  color: #fff;
-  background: radial-gradient(circle at 30% 20%, rgba(129,140,248,0.9), rgba(99,102,241,0.7));
-  border: 1px solid rgba(99,102,241,0.5);
-  box-shadow: 0 6px 18px rgba(99,102,241,0.2);
-}
-
-.user-name {
-  font-weight: 700;
-  font-size: 12px;
-  color: var(--text-primary);
-  max-width: 160px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ---- Add user form ---- */
-.add-user-form {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: rgba(30, 36, 51, 0.6);
-}
-
-.text-input {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 13px;
-  font-family: inherit;
-  outline: none;
-  width: 200px;
-}
-
-.text-input#new-user-id {
-  width: 140px;
-}
-
-.text-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(99,102,241,0.16);
-}
-
 /* ---- Select / Dropdown ---- */
 select {
   background: var(--bg-card);
@@ -443,12 +374,6 @@ button {
 .inbox-header h2 {
   font-size: 15px;
   font-weight: 600;
-}
-
-.inbox-subtitle {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-secondary);
 }
 
 .inbox-count {
