@@ -79,29 +79,4 @@ npm run dev
 The app will start at `http://localhost:3000`. 
 Open two different browser windows side-by-side. Select `user_a` in one and `user_b` in the other to watch the real-time bidirectional flow in action!
 
----
 
-## ☁️ Deployment Guide (Vercel + Render)
-
-The application is engineered to deploy seamlessly on free-tier friendly platforms like Vercel (Frontend) and Render (Backend).
-
-### 1. Deploy the Backend to Render
-1. Create a `render.yaml` at the root of the repository or manually create a **Web Service** on [Render](https://render.com).
-2. Point it to the `backend` directory.
-3. **Build Command:** `pip install -r requirements.txt`
-4. **Start Command:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
-5. **Environment Variables:**
-   - `JWT_SECRET_KEY` = `your_secure_random_string`
-   - `FRONTEND_URL` = `https://your-frontend-url.vercel.app` (You can add this after deploying the frontend).
-6. Copy your Render service URL (e.g., `https://smart-notifications.onrender.com`).
-
-### 2. Deploy the Frontend to Vercel
-1. Go to [Vercel](https://vercel.com) and import the repository.
-2. Select the `frontend` directory as the Root Directory.
-3. Vercel will automatically detect Vite. 
-4. **Environment Variables:**
-   - `VITE_API_URL` = `https://smart-notifications.onrender.com`
-   - `VITE_WS_URL` = `wss://smart-notifications.onrender.com` *(Note the `wss://` prefix)*
-5. Deploy.
-
-Once both are deployed, update Render's `FRONTEND_URL` variable to point to Vercel to ensure proper CORS behavior.
