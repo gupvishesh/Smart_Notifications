@@ -1,16 +1,16 @@
 import { useState } from 'react'
 import NotificationItem from './NotificationItem.jsx'
 
-const FILTERS = ['All', 'Unread', 'Assignments', 'Messages', 'Grades']
+const FILTERS = ['All', 'Unread', 'Assignment', 'Message', 'Grade']
 
 const TYPE_MAP = {
-  Assignments: 'assignment_update',
-  Messages:    'message',
-  Grades:      'grade_posted',
+  Assignment: 'assignment_update',
+  Message:    'message',
+  Grade:      'grade_posted',
 }
 
 /**
- * NotificationInbox — filter tabs, mark-all-read, scrollable grouped list.
+ * NotificationInbox — pill tab filters, mark-all-read, scrollable grouped list.
  */
 export default function NotificationInbox({ notifications, userId, onMarkRead, onDismiss, onMarkAllRead }) {
   const [activeFilter, setActiveFilter] = useState('All')
@@ -25,32 +25,35 @@ export default function NotificationInbox({ notifications, userId, onMarkRead, o
 
   return (
     <div className="inbox-panel">
+
       {/* Header */}
       <div className="inbox-header">
-        <div>
+        <div className="inbox-header-left">
           <h2>Inbox</h2>
           <span className="inbox-count">
-            {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+            {unreadCount > 0 ? `${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}` : '0 unread notifications'}
           </span>
         </div>
         {unreadCount > 0 && (
           <button
-            className="btn-secondary btn-sm"
+            className="mark-all-btn"
             onClick={() => onMarkAllRead(userId)}
             title="Mark all as read"
+            id="mark-all-read-btn"
           >
-            ✓✓ Mark all read
+            ✓ Mark all read
           </button>
         )}
       </div>
 
-      {/* Filter Tabs */}
+      {/* Filter Pill Tabs */}
       <div className="filter-tabs">
         {FILTERS.map((f) => (
           <button
             key={f}
             className={`filter-tab ${activeFilter === f ? 'active' : ''}`}
             onClick={() => setActiveFilter(f)}
+            id={`filter-tab-${f.toLowerCase()}`}
           >
             {f}
             {f === 'Unread' && unreadCount > 0 && (

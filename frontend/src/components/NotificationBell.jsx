@@ -1,16 +1,18 @@
 /**
- * NotificationBell — bell icon with an unread badge.
- * Clicking it toggles the inbox panel open/closed.
+ * NotificationBell — circular icon button with unread badge.
+ * Matches the new header icon button design.
  */
 export default function NotificationBell({ notifications, isOpen, onToggle }) {
   const unreadCount = notifications.filter((n) => !n.read).length
 
   return (
     <button
-      className="bell-btn"
+      className={`header-icon-btn ${isOpen ? 'active' : ''}`}
       onClick={onToggle}
       aria-label={`Notifications (${unreadCount} unread)`}
       title="Open notification inbox"
+      id="notification-bell-btn"
+      style={{ fontSize: 17 }}
     >
       🔔
       {unreadCount > 0 && (

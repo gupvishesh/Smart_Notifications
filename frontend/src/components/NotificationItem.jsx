@@ -1,18 +1,12 @@
 import { useEffect, useRef } from 'react'
 
 /**
- * Maps notification type to a readable label + icon.
+ * Maps notification type to a readable label, icon, and color class.
  */
 const TYPE_META = {
-  assignment_update: { label: 'Assignment Update', icon: '📝' },
-  message:           { label: 'New Message',       icon: '💬' },
-  grade_posted:      { label: 'Grade Posted',      icon: '🎓' },
-}
-
-const PRIORITY_CLASS = {
-  urgent: 'priority-urgent',
-  normal: 'priority-normal',
-  low:    'priority-low',
+  assignment_update: { label: 'Assignment Update', icon: '📄', colorClass: 'blue' },
+  message:           { label: 'Message Update',    icon: '💬', colorClass: 'purple' },
+  grade_posted:      { label: 'Grade Posted',       icon: '🎓', colorClass: 'green' },
 }
 
 function formatTime(isoString) {
@@ -30,15 +24,20 @@ function formatTime(isoString) {
 
 /**
  * NotificationItem — single inbox row.
- * Features: priority border, grouped ×N badge, dismiss button, auto-read on visible.
+ * Features:
+ *  - Type-specific left border accent (blue/red/green)
+ *  - Priority-based urgent rose background and tag
+ *  - Grouped ×N pill badge
+ *  - Auto-read after 2,000ms viewport dwell via IntersectionObserver
+ *  - Dismiss button
  */
 export default function NotificationItem({ notification, onMarkRead, onDismiss }) {
   const { id, type, message, timestamp, read, grouped_count, priority } = notification
-  const meta = TYPE_META[type] || { label: type, icon: '🔔' }
+  const meta = TYPE_META[type] || { label: type, icon: '🔔', colorClass: 'blue' }
   const itemRef = useRef(null)
   const timerRef = useRef(null)
 
-  // Auto-read on visible for >2s using Intersection Observer
+  // Auto-read on visible for > 2s using Intersection Observer
   useEffect(() => {
     if (read) return
 
@@ -60,34 +59,47 @@ export default function NotificationItem({ notification, onMarkRead, onDismiss }
     }
   }, [id, read, onMarkRead])
 
+  const priorityClass = priority === 'urgent' ? 'priority-urgent'
+                      : priority === 'low'    ? 'priority-low'
+                      : ''
+
   return (
     <li
       ref={itemRef}
-      className={`notif-item ${read ? '' : 'unread'} ${PRIORITY_CLASS[priority] || ''}`}
+      className={`notif-item ${read ? '' : 'unread'} type-${type} ${priorityClass}`}
     >
-      <div className="notif-icon">{meta.icon}</div>
+      {/* Icon */}
+      <div className={`notif-icon-wrap ${meta.colorClass}`}>
+        {meta.icon}
+      </div>
 
+      {/* Body */}
       <div className="notif-body">
         <div className="notif-type-row">
           <span className="notif-type">{meta.label}</span>
+
           {grouped_count > 1 && (
             <span className="notif-badge">×{grouped_count}</span>
           )}
+
           {priority === 'urgent' && (
-            <span className="priority-tag urgent">🔴 Urgent</span>
+            <span className="priority-tag urgent">URGENT</span>
           )}
+
           {priority === 'low' && (
             <span className="priority-tag low">Low</span>
           )}
         </div>
+
         <p className="notif-message">{message}</p>
         <p className="notif-time">{formatTime(timestamp)}</p>
       </div>
 
+      {/* Actions */}
       <div className="notif-actions">
         {!read && (
           <button
-            className="btn-secondary btn-sm"
+            className="btn-read"
             onClick={() => onMarkRead(id)}
             title="Mark as read"
           >
@@ -95,7 +107,7 @@ export default function NotificationItem({ notification, onMarkRead, onDismiss }
           </button>
         )}
         <button
-          className="btn-dismiss btn-sm"
+          className="btn-dismiss"
           onClick={() => onDismiss(id)}
           title="Dismiss"
         >

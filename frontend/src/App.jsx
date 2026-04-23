@@ -8,14 +8,14 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const DEFAULT_USERS = ['user_a', 'user_b', 'user_c', 'Admin']
 
 const NOTIFICATION_TYPES = [
-  { type: 'assignment_update', label: 'Send Assignment Update', icon: '📝' },
-  { type: 'message',           label: 'Send Message',           icon: '💬' },
-  { type: 'grade_posted',      label: 'Send Grade Posted',      icon: '🎓' },
+  { type: 'assignment_update', label: 'Send Assignment Update', icon: '📄', colorClass: 'blue' },
+  { type: 'message',           label: 'Send Message',           icon: '💬', colorClass: 'purple' },
+  { type: 'grade_posted',      label: 'Send Grade Posted',      icon: '🎓', colorClass: 'green' },
 ]
 
-const PRIORITIES = ['normal', 'urgent', 'low']
+const PRIORITIES = ['low', 'normal', 'urgent']
 
-// ── AudioContext beep ────────────────────────────────────────────────────
+// ── AudioContext beep ────────────────────────────────────────────────────────
 function playBeep() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)()
@@ -32,56 +32,66 @@ function playBeep() {
   } catch (_) {}
 }
 
-// ── Toast component ──────────────────────────────────────────────────────
-function Toast({ toast, onDone }) {
-  const timerRef = useRef(null)
-  useEffect(() => {
-    timerRef.current = setTimeout(onDone, 3000)
-    return () => clearTimeout(timerRef.current)
-  }, [toast.id, onDone])
+// ── Toast component ──────────────────────────────────────────────────────────
+function Toast({ toast, onDismiss }) {
+  const isUrgent = toast.priority === 'urgent'
+  const duration = isUrgent ? 5000 : 3000
+  const icons = { assignment_update: '📄', message: '💬', grade_posted: '🎓' }
 
-  const icons = { assignment_update: '📝', message: '💬', grade_posted: '🎓' }
-  const urgentStyle = toast.priority === 'urgent'
-    ? { borderColor: 'var(--danger)', boxShadow: '0 0 0 1px rgba(239,68,68,0.3)' }
-    : {}
+  useEffect(() => {
+    const t = setTimeout(onDismiss, duration)
+    return () => clearTimeout(t)
+  }, [toast.id, onDismiss, duration])
 
   return (
-    <div className="toast" role="alert" aria-live="polite" style={urgentStyle}>
-      <span className="toast-icon">{icons[toast.type] || '🔔'}</span>
-      <div className="toast-body">
-        <p className="toast-title">
-          {toast.priority === 'urgent' && '🔴 '}New notification
-        </p>
-        <p className="toast-msg">{toast.message}</p>
+    <div className={`toast ${isUrgent ? 'urgent-toast' : ''}`} role="alert" aria-live="polite">
+      <div className="toast-inner">
+        <span className="toast-icon">{icons[toast.type] || '🔔'}</span>
+        <div className="toast-body">
+          <p className="toast-title">
+            {isUrgent && <span className="toast-urgent-dot" />}
+            New notification
+          </p>
+          <p className="toast-msg">{toast.message}</p>
+        </div>
+        <button className="toast-dismiss" onClick={onDismiss}>✕</button>
+      </div>
+      {/* Progress bar */}
+      <div className="toast-progress">
+        <div
+          className="toast-progress-bar"
+          style={{ animationDuration: `${duration}ms` }}
+        />
       </div>
     </div>
   )
 }
 
-// ── Main App ─────────────────────────────────────────────────────────────
+// ── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [users, setUsers]                       = useState(DEFAULT_USERS)
-  const [selectedUser, setSelectedUser]         = useState('user_a')
-  const [targetUser,   setTargetUser]           = useState('user_a')
-  const [isOnline,     setIsOnline]             = useState(true)
-  const [notifications, setNotifications]       = useState([])
-  const [inboxOpen,    setInboxOpen]            = useState(false)
-  const [toast,        setToast]                = useState(null)
-  const [sending,      setSending]              = useState(null)
-  const [soundEnabled, setSoundEnabled]         = useState(false)
-  const [priority,     setPriority]             = useState('normal')
-  const [newUserInput, setNewUserInput]         = useState('')
-  const [addingUser,   setAddingUser]           = useState(false)
+  const [users, setUsers]                   = useState(DEFAULT_USERS)
+  const [selectedUser, setSelectedUser]     = useState('user_a')
+  const [targetUser, setTargetUser]         = useState('user_a')
+  const [isOnline, setIsOnline]             = useState(true)
+  const [notifications, setNotifications]   = useState([])
+  const [inboxOpen, setInboxOpen]           = useState(false)
+  const [toast, setToast]                   = useState(null)
+  const [sending, setSending]               = useState(null)
+  const [soundEnabled, setSoundEnabled]     = useState(false)
+  const [priority, setPriority]             = useState('normal')
+  const [newUserInput, setNewUserInput]     = useState('')
+  const [addingUser, setAddingUser]         = useState(false)
+  const [customMessage, setCustomMessage]   = useState('')
 
   const isAdmin = selectedUser === 'Admin'
 
-  // ── Tab title badge ───────────────────────────────────────────────────
+  // ── Tab title badge ─────────────────────────────────────────────────────
   useEffect(() => {
     const unread = notifications.filter((n) => !n.read && !n.dismissed).length
     document.title = unread > 0 ? `(${unread}) Smart Notifications` : 'Smart Notifications'
   }, [notifications])
 
-  // ── Fetch full inbox ──────────────────────────────────────────────────
+  // ── Fetch full inbox ────────────────────────────────────────────────────
   const fetchNotifications = useCallback(async (userId) => {
     if (userId === 'Admin') { setNotifications([]); return }
     try {
@@ -97,7 +107,7 @@ export default function App() {
     fetchNotifications(selectedUser)
   }, [selectedUser, fetchNotifications])
 
-  // ── Fetch known users from backend on mount ───────────────────────────
+  // ── Fetch known users from backend on mount ─────────────────────────────
   useEffect(() => {
     fetch(`${API_URL}/users`)
       .then((r) => r.json())
@@ -110,7 +120,7 @@ export default function App() {
       .catch(() => {})
   }, [])
 
-  // ── WebSocket incoming message handler ────────────────────────────────
+  // ── WebSocket incoming message handler ─────────────────────────────────
   const handleWsMessage = useCallback((notif) => {
     if (soundEnabled) playBeep()
     setNotifications((prev) => {
@@ -127,7 +137,7 @@ export default function App() {
 
   useWebSocket(selectedUser === 'Admin' ? null : selectedUser, isOnline, handleWsMessage)
 
-  // ── Trigger notification ──────────────────────────────────────────────
+  // ── Trigger notification ────────────────────────────────────────────────
   const triggerNotification = async (type) => {
     setSending(type)
     try {
@@ -138,7 +148,7 @@ export default function App() {
           user_id:        selectedUser,
           target_user_id: targetUser,
           type,
-          message: buildMessage(type),
+          message: customMessage.trim() || buildMessage(type),
           priority,
         }),
       })
@@ -149,7 +159,7 @@ export default function App() {
     }
   }
 
-  // ── Admin: Broadcast to all users ─────────────────────────────────────
+  // ── Admin: Broadcast to all ─────────────────────────────────────────────
   const broadcastToAll = async (type) => {
     setSending(type + '_broadcast')
     const targets = users.filter((u) => u !== 'Admin')
@@ -163,7 +173,7 @@ export default function App() {
               user_id:        'Admin',
               target_user_id: u,
               type,
-              message: buildMessage(type),
+              message: customMessage.trim() || buildMessage(type),
               priority,
             }),
           })
@@ -174,7 +184,7 @@ export default function App() {
     }
   }
 
-  // ── Mark single as read ───────────────────────────────────────────────
+  // ── Mark single as read ─────────────────────────────────────────────────
   const handleMarkRead = async (id) => {
     try {
       const res = await fetch(`${API_URL}/notifications/${id}/read`, { method: 'PATCH' })
@@ -183,7 +193,7 @@ export default function App() {
     } catch (e) { console.error(e) }
   }
 
-  // ── Mark all read ─────────────────────────────────────────────────────
+  // ── Mark all read ───────────────────────────────────────────────────────
   const handleMarkAllRead = async (userId) => {
     try {
       await fetch(`${API_URL}/notifications/${userId}/read-all`, { method: 'PATCH' })
@@ -191,7 +201,7 @@ export default function App() {
     } catch (e) { console.error(e) }
   }
 
-  // ── Dismiss notification ──────────────────────────────────────────────
+  // ── Dismiss notification ────────────────────────────────────────────────
   const handleDismiss = async (id) => {
     try {
       await fetch(`${API_URL}/notifications/${id}`, { method: 'DELETE' })
@@ -199,7 +209,7 @@ export default function App() {
     } catch (e) { console.error(e) }
   }
 
-  // ── Add custom user ───────────────────────────────────────────────────
+  // ── Add custom user ─────────────────────────────────────────────────────
   const handleAddUser = async () => {
     const uid = newUserInput.trim()
     if (!uid || users.includes(uid)) return
@@ -215,7 +225,7 @@ export default function App() {
     } catch (e) { console.error(e) }
   }
 
-  // ── User switch ───────────────────────────────────────────────────────
+  // ── User switch ─────────────────────────────────────────────────────────
   const handleUserSwitch = (newUser) => {
     setSelectedUser(newUser)
     if (newUser !== 'Admin') setTargetUser(newUser)
@@ -223,7 +233,7 @@ export default function App() {
     setInboxOpen(false)
   }
 
-  // ── Online/offline toggle ─────────────────────────────────────────────
+  // ── Online/offline toggle ───────────────────────────────────────────────
   const handleToggleOnline = () => {
     const next = !isOnline
     setIsOnline(next)
@@ -232,71 +242,96 @@ export default function App() {
 
   const dismissToast = useCallback(() => setToast(null), [])
 
+  // ── Derive avatar initials ──────────────────────────────────────────────
+  const getInitials = (uid) => {
+    if (!uid) return '?'
+    return uid === 'Admin' ? 'AD' : uid.replace('user_', '').toUpperCase().slice(0, 2)
+  }
+
+  const unreadCount = notifications.filter((n) => !n.read && !n.dismissed).length
+
   return (
     <div className="app-wrapper">
-      {toast && <Toast key={toast._toastId} toast={toast} onDone={dismissToast} />}
 
-      {/* ── Header ─────────────────────────────────────────────────── */}
+      {/* ── Toast ─────────────────────────────────────────────────────── */}
+      <div className="toast-container">
+        {toast && (
+          <Toast key={toast._toastId} toast={toast} onDismiss={dismissToast} />
+        )}
+      </div>
+
+      {/* ── Header ───────────────────────────────────────────────────── */}
       <header className="app-header">
-        <h1>🔔 <span>Smart</span> Notifications</h1>
+        <h1>
+          <span className="logo-icon">🔔</span>
+          Smart Notifications
+        </h1>
 
         <div className="header-controls">
-          {/* Logged-in user selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>As:</span>
+
+          {/* Identity Pill */}
+          <div className="identity-pill">
+            <div className="avatar">{getInitials(selectedUser)}</div>
+            <span>As: {selectedUser}</span>
+            <span className="chevron">▾</span>
             <select
               id="user-select"
               value={selectedUser}
               onChange={(e) => handleUserSwitch(e.target.value)}
+              aria-label="Switch active user"
             >
               {users.map((u) => <option key={u} value={u}>{u}</option>)}
             </select>
           </div>
 
-          {/* Add user button */}
+          {/* Add User */}
           {addingUser ? (
-            <div style={{ display: 'flex', gap: 6 }}>
+            <div className="add-user-expand">
               <input
                 id="new-user-input"
+                className="add-user-input"
                 type="text"
-                placeholder="user_id"
+                placeholder="user_id…"
                 value={newUserInput}
                 onChange={(e) => setNewUserInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddUser()}
-                style={{
-                  background: 'var(--bg-card)', border: '1px solid var(--border)',
-                  color: 'var(--text-primary)', borderRadius: 6, padding: '6px 10px',
-                  fontSize: 13, fontFamily: 'inherit', outline: 'none', width: 110,
-                }}
                 autoFocus
               />
-              <button className="btn-primary btn-sm" onClick={handleAddUser}>Add</button>
-              <button className="btn-secondary btn-sm" onClick={() => { setAddingUser(false); setNewUserInput('') }}>✕</button>
+              <button className="btn-primary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={handleAddUser}>Add</button>
+              <button className="btn-secondary" style={{ padding: '6px 10px', fontSize: 12 }} onClick={() => { setAddingUser(false); setNewUserInput('') }}>✕</button>
             </div>
           ) : (
-            <button className="btn-secondary btn-sm" id="add-user-btn" onClick={() => setAddingUser(true)}>+ User</button>
+            <button
+              id="add-user-btn"
+              className="header-icon-btn"
+              onClick={() => setAddingUser(true)}
+              title="Add new user"
+              style={{ fontSize: 18, fontWeight: 700 }}
+            >
+              +
+            </button>
           )}
 
-          {/* Sound toggle */}
+          {/* Sound Toggle */}
           <button
-            className={soundEnabled ? 'btn-primary btn-sm' : 'btn-secondary btn-sm'}
-            onClick={() => setSoundEnabled((s) => !s)}
-            title={soundEnabled ? 'Sound on' : 'Sound off'}
             id="sound-toggle-btn"
+            className={`header-icon-btn ${soundEnabled ? 'active' : ''}`}
+            onClick={() => setSoundEnabled((s) => !s)}
+            title={soundEnabled ? 'Sound on – click to mute' : 'Sound off – click to enable'}
           >
             {soundEnabled ? '🔔' : '🔕'}
           </button>
 
-          {/* Online/offline */}
+          {/* Online Status + Network Kill Switch */}
           {!isAdmin && (
             <>
-              <div className={`status-badge ${isOnline ? 'online' : 'offline'}`}>
+              <div className={`status-pill ${isOnline ? 'online' : 'offline'}`}>
                 <span className={`status-dot ${isOnline ? 'pulse' : ''}`} />
                 {isOnline ? 'Online' : 'Offline'}
               </div>
               <button
                 id="toggle-online-btn"
-                className={isOnline ? 'btn-danger btn-sm' : 'btn-success btn-sm'}
+                className={`network-btn ${isOnline ? 'go-offline' : 'go-online'}`}
                 onClick={handleToggleOnline}
               >
                 {isOnline ? '⊘ Go Offline' : '↺ Go Online'}
@@ -304,7 +339,7 @@ export default function App() {
             </>
           )}
 
-          {/* Bell (hidden for Admin) */}
+          {/* Notification Bell */}
           {!isAdmin && (
             <NotificationBell
               notifications={notifications}
@@ -315,22 +350,32 @@ export default function App() {
         </div>
       </header>
 
-      {/* ── Main grid ───────────────────────────────────────────────── */}
+      {/* ── Main Grid ──────────────────────────────────────────────────── */}
       <div className="main-grid">
 
-        {/* ── Left: Trigger Panel ─────────────────────────────────── */}
+        {/* ── Left: Trigger Panel ──────────────────────────────────────── */}
         <div className="panel">
-          <p className="panel-title">
-            {isAdmin ? '📡 Admin Broadcast Panel' : 'Trigger Notifications'}
-          </p>
+          <div className="panel-header">
+            <p className="panel-title">
+              {isAdmin ? '📡' : '🎯'} {isAdmin ? 'Admin Broadcast Panel' : 'Trigger Notifications'}
+            </p>
+            <p className="panel-subtitle">
+              {isAdmin
+                ? 'Broadcast messages to all connected users simultaneously.'
+                : 'Dispatch real-time payloads to connected users.'}
+            </p>
+          </div>
 
-          <div className="trigger-row">
-            {/* Target user (non-admin) */}
-            {!isAdmin && (
-              <div className="trigger-meta">
-                <span className="target-label">Send to:</span>
+          <div className="panel-divider" />
+
+          {/* Target User */}
+          {!isAdmin && (
+            <div className="form-section">
+              <label className="form-label">Target User</label>
+              <div className="target-select-wrapper">
                 <select
                   id="target-user-select"
+                  className="target-select"
                   value={targetUser}
                   onChange={(e) => setTargetUser(e.target.value)}
                 >
@@ -338,77 +383,91 @@ export default function App() {
                     <option key={u} value={u}>{u}</option>
                   ))}
                 </select>
-                {targetUser !== selectedUser && (
-                  <span style={{ fontSize: 11, color: 'var(--accent-hover)' }}>
-                    Cross-user ↗
-                  </span>
-                )}
               </div>
-            )}
-
-            {/* Priority selector */}
-            <div className="trigger-meta">
-              <span className="target-label">Priority:</span>
-              <select
-                id="priority-select"
-                value={priority}
-                onChange={(e) => setPriority(e.target.value)}
-              >
-                {PRIORITIES.map((p) => (
-                  <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
-                ))}
-              </select>
+              {targetUser !== selectedUser && (
+                <span className="cross-user-tag">↗ Cross-user Broadcast</span>
+              )}
             </div>
+          )}
 
-            {/* Trigger / Broadcast buttons */}
-            <div className="trigger-buttons">
-              {NOTIFICATION_TYPES.map(({ type, label, icon }) => (
+          {/* Priority Segmented Control */}
+          <div className="form-section">
+            <label className="form-label">Priority Level</label>
+            <div className="priority-toggle">
+              {PRIORITIES.map((p) => (
                 <button
-                  key={type}
-                  id={isAdmin ? `broadcast-${type}` : `trigger-${type}`}
-                  className="btn-primary trigger-btn"
-                  onClick={() => isAdmin ? broadcastToAll(type) : triggerNotification(type)}
-                  disabled={!!sending}
+                  key={p}
+                  className={`priority-option ${priority === p ? `active ${p}` : ''}`}
+                  onClick={() => setPriority(p)}
                 >
-                  <span className="icon">{icon}</span>
-                  {sending === type || sending === type + '_broadcast'
-                    ? (isAdmin ? 'Broadcasting…' : 'Sending…')
-                    : (isAdmin ? `Broadcast ${label.replace('Send ', '')}` : label)}
+                  {p.charAt(0).toUpperCase() + p.slice(1)}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Info card */}
-          <div style={{
-            marginTop: 20, padding: '12px 14px', background: 'var(--bg-card)',
-            borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)',
-            fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7,
-          }}>
+          {/* Payload Content */}
+          <div className="form-section">
+            <label className="form-label">Payload Content</label>
+            <textarea
+              className="payload-textarea"
+              placeholder="Type custom notification content or use template…"
+              value={customMessage}
+              onChange={(e) => setCustomMessage(e.target.value)}
+            />
+          </div>
+
+          {/* Action Buttons */}
+          <div className="form-section">
+            <label className="form-label">Actions</label>
+            <div className="actions-section">
+              {NOTIFICATION_TYPES.map(({ type, label, icon, colorClass }) => (
+                <button
+                  key={type}
+                  id={isAdmin ? `broadcast-${type}` : `trigger-${type}`}
+                  className="trigger-btn"
+                  onClick={() => isAdmin ? broadcastToAll(type) : triggerNotification(type)}
+                  disabled={!!sending}
+                >
+                  <span className={`btn-icon ${colorClass}`}>{icon}</span>
+                  <span className="btn-label">
+                    {sending === type || sending === type + '_broadcast'
+                      ? (isAdmin ? 'Broadcasting…' : 'Sending…')
+                      : (isAdmin ? `Broadcast ${label.replace('Send ', '')}` : label)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* System Intelligence Card */}
+          <div className="intel-card">
+            <div className="intel-card-title">
+              ⓘ System Intelligence
+            </div>
             {isAdmin ? (
-              <>
-                <strong style={{ color: 'var(--text-primary)' }}>Admin Panel</strong><br />
-                📡 Broadcasts fire <code>POST /notify</code> for ALL users simultaneously
-              </>
+              <ul>
+                <li>Broadcasts fire <code>POST /notify</code> for ALL users simultaneously</li>
+                <li>Offline users are queued and flushed on reconnect</li>
+              </ul>
             ) : (
-              <>
-                <strong style={{ color: 'var(--text-primary)' }}>How it works</strong><br />
-                ✅ Online → pushed instantly over WebSocket<br />
-                📦 Offline → queued, delivered on reconnect<br />
-                🔗 Same-type unread → grouped (×N badge)<br />
-                🔴 Urgent → red border + tag
-              </>
+              <ul>
+                <li>Duplicate payloads are automatically grouped</li>
+                <li>Online users receive push delivery via WebSocket</li>
+                <li>Offline users are queued and flushed on reconnect</li>
+                <li>Urgent items trigger a 5-second aggressive toast</li>
+              </ul>
             )}
           </div>
         </div>
 
-        {/* ── Right: Inbox ────────────────────────────────────────── */}
+        {/* ── Right: Inbox ─────────────────────────────────────────────── */}
         {isAdmin ? (
-          <div className="inbox-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
-            <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>👑</div>
-              <p>Admin has no inbox.</p>
-              <p style={{ fontSize: 12, marginTop: 4 }}>Switch to a user to view their notifications.</p>
+          <div className="inbox-panel">
+            <div className="admin-empty">
+              <span className="crown">👑</span>
+              <p style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Admin has no inbox.</p>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Switch to a user account to view their notifications.</p>
             </div>
           </div>
         ) : (
@@ -425,7 +484,7 @@ export default function App() {
   )
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 function buildMessage(type) {
   const messages = {
     assignment_update: 'Your assignment has been updated. Please review the changes.',
