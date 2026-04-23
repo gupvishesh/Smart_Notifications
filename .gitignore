@@ -1,4 +1,26 @@
-*/node_modules
-*/dist
-*/__pycache__
-*/.env
+# Dependencies
+node_modules/
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+
+# Build outputs
+dist/
+build/
+.output/
+
+# Environment variables
+.env
+.env.local
+
+# Database
+*.db
+*.sqlite3
+*.db-journal
+
+# OS files
+.DS_Store
+Thumbs.db

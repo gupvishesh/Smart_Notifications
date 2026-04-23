@@ -25,3 +25,7 @@ class Notification(BaseModel):
 
 class UserCreate(BaseModel):
     user_id: str
+
+
+class TokenRequest(BaseModel):
+    user_id: str

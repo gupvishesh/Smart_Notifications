@@ -5,7 +5,23 @@ import NotificationInbox from './components/NotificationInbox.jsx'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-const DEFAULT_USERS = ['user_a', 'user_b', 'user_c', 'Admin']
+/** Fetch a JWT for the given userId from POST /auth/token. */
+async function fetchAppToken(userId) {
+  try {
+    const res = await fetch(`${API_URL}/auth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    return data.access_token
+  } catch {
+    return null
+  }
+}
+
+const DEFAULT_USERS = ['Alex', 'Blake', 'Casey', 'Admin']
 
 const NOTIFICATION_TYPES = [
   { type: 'assignment_update', label: 'Send Assignment Update', icon: '📄', colorClass: 'blue' },
@@ -56,12 +72,8 @@ function Toast({ toast, onDismiss }) {
         </div>
         <button className="toast-dismiss" onClick={onDismiss}>✕</button>
       </div>
-      {/* Progress bar */}
       <div className="toast-progress">
-        <div
-          className="toast-progress-bar"
-          style={{ animationDuration: `${duration}ms` }}
-        />
+        <div className="toast-progress-bar" style={{ animationDuration: `${duration}ms` }} />
       </div>
     </div>
   )
@@ -69,29 +81,30 @@ function Toast({ toast, onDismiss }) {
 
 // ── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [users, setUsers]                   = useState(DEFAULT_USERS)
-  const [selectedUser, setSelectedUser]     = useState('user_a')
-  const [targetUser, setTargetUser]         = useState('user_a')
-  const [isOnline, setIsOnline]             = useState(true)
-  const [notifications, setNotifications]   = useState([])
-  const [inboxOpen, setInboxOpen]           = useState(false)
-  const [toast, setToast]                   = useState(null)
-  const [sending, setSending]               = useState(null)
-  const [soundEnabled, setSoundEnabled]     = useState(false)
-  const [priority, setPriority]             = useState('normal')
-  const [newUserInput, setNewUserInput]     = useState('')
-  const [addingUser, setAddingUser]         = useState(false)
-  const [customMessage, setCustomMessage]   = useState('')
+  const [users, setUsers]                 = useState(DEFAULT_USERS)
+  const [selectedUser, setSelectedUser]   = useState('Alex')
+  const [targetUser, setTargetUser]       = useState('Alex')
+  const [isOnline, setIsOnline]           = useState(true)
+  const [notifications, setNotifications] = useState([])
+  const [inboxOpen, setInboxOpen]         = useState(false)
+  const [toast, setToast]                 = useState(null)
+  const [sending, setSending]             = useState(null)
+  const [soundEnabled, setSoundEnabled]   = useState(false)
+  const [priority, setPriority]           = useState('normal')
+  const [newUserInput, setNewUserInput]   = useState('')
+  const [addingUser, setAddingUser]       = useState(false)
+  const [customMessage, setCustomMessage] = useState('')
+  const tokenRef = useRef(null) // cached JWT for the active user
 
   const isAdmin = selectedUser === 'Admin'
 
-  // ── Tab title badge ─────────────────────────────────────────────────────
+  // ── Tab title badge ──────────────────────────────────────────────────────
   useEffect(() => {
     const unread = notifications.filter((n) => !n.read && !n.dismissed).length
     document.title = unread > 0 ? `(${unread}) Smart Notifications` : 'Smart Notifications'
   }, [notifications])
 
-  // ── Fetch full inbox ────────────────────────────────────────────────────
+  // ── Fetch full inbox ─────────────────────────────────────────────────────
   const fetchNotifications = useCallback(async (userId) => {
     if (userId === 'Admin') { setNotifications([]); return }
     try {
@@ -105,9 +118,15 @@ export default function App() {
 
   useEffect(() => {
     fetchNotifications(selectedUser)
+    // Refresh JWT when the active user changes
+    if (selectedUser !== 'Admin') {
+      fetchAppToken(selectedUser).then((t) => { tokenRef.current = t })
+    } else {
+      tokenRef.current = null
+    }
   }, [selectedUser, fetchNotifications])
 
-  // ── Fetch known users from backend on mount ─────────────────────────────
+  // ── Fetch known users from backend on mount ──────────────────────────────
   useEffect(() => {
     fetch(`${API_URL}/users`)
       .then((r) => r.json())
@@ -120,7 +139,7 @@ export default function App() {
       .catch(() => {})
   }, [])
 
-  // ── WebSocket incoming message handler ─────────────────────────────────
+  // ── WebSocket incoming message handler ───────────────────────────────────
   const handleWsMessage = useCallback((notif) => {
     if (soundEnabled) playBeep()
     setNotifications((prev) => {
@@ -137,13 +156,19 @@ export default function App() {
 
   useWebSocket(selectedUser === 'Admin' ? null : selectedUser, isOnline, handleWsMessage)
 
-  // ── Trigger notification ────────────────────────────────────────────────
+  // ── Trigger notification ─────────────────────────────────────────────────
   const triggerNotification = async (type) => {
     setSending(type)
+    // Ensure we have a valid JWT before sending
+    const token = tokenRef.current || (await fetchAppToken(selectedUser))
+    if (token) tokenRef.current = token
     try {
       await fetch(`${API_URL}/notify`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           user_id:        selectedUser,
           target_user_id: targetUser,
@@ -159,21 +184,26 @@ export default function App() {
     }
   }
 
-  // ── Admin: Broadcast to all ─────────────────────────────────────────────
+  // ── Admin: Broadcast to all ──────────────────────────────────────────────
   const broadcastToAll = async (type) => {
     setSending(type + '_broadcast')
     const targets = users.filter((u) => u !== 'Admin')
+    const token = tokenRef.current || (await fetchAppToken('Admin'))
+    if (token) tokenRef.current = token
     try {
       await Promise.all(
         targets.map((u) =>
           fetch(`${API_URL}/notify`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
             body: JSON.stringify({
               user_id:        'Admin',
               target_user_id: u,
               type,
-              message: customMessage.trim() || buildMessage(type),
+              message:        customMessage.trim() || buildMessage(type),
               priority,
             }),
           })
@@ -184,7 +214,7 @@ export default function App() {
     }
   }
 
-  // ── Mark single as read ─────────────────────────────────────────────────
+  // ── Mark single as read ──────────────────────────────────────────────────
   const handleMarkRead = async (id) => {
     try {
       const res = await fetch(`${API_URL}/notifications/${id}/read`, { method: 'PATCH' })
@@ -193,7 +223,7 @@ export default function App() {
     } catch (e) { console.error(e) }
   }
 
-  // ── Mark all read ───────────────────────────────────────────────────────
+  // ── Mark all read ────────────────────────────────────────────────────────
   const handleMarkAllRead = async (userId) => {
     try {
       await fetch(`${API_URL}/notifications/${userId}/read-all`, { method: 'PATCH' })
@@ -201,7 +231,7 @@ export default function App() {
     } catch (e) { console.error(e) }
   }
 
-  // ── Dismiss notification ────────────────────────────────────────────────
+  // ── Dismiss notification ─────────────────────────────────────────────────
   const handleDismiss = async (id) => {
     try {
       await fetch(`${API_URL}/notifications/${id}`, { method: 'DELETE' })
@@ -209,7 +239,7 @@ export default function App() {
     } catch (e) { console.error(e) }
   }
 
-  // ── Add custom user ─────────────────────────────────────────────────────
+  // ── Add custom user ──────────────────────────────────────────────────────
   const handleAddUser = async () => {
     const uid = newUserInput.trim()
     if (!uid || users.includes(uid)) return
@@ -225,7 +255,7 @@ export default function App() {
     } catch (e) { console.error(e) }
   }
 
-  // ── User switch ─────────────────────────────────────────────────────────
+  // ── User switch ──────────────────────────────────────────────────────────
   const handleUserSwitch = (newUser) => {
     setSelectedUser(newUser)
     if (newUser !== 'Admin') setTargetUser(newUser)
@@ -233,7 +263,7 @@ export default function App() {
     setInboxOpen(false)
   }
 
-  // ── Online/offline toggle ───────────────────────────────────────────────
+  // ── Online/offline toggle ────────────────────────────────────────────────
   const handleToggleOnline = () => {
     const next = !isOnline
     setIsOnline(next)
@@ -242,22 +272,18 @@ export default function App() {
 
   const dismissToast = useCallback(() => setToast(null), [])
 
-  // ── Derive avatar initials ──────────────────────────────────────────────
+  // ── Derive avatar initials ───────────────────────────────────────────────
   const getInitials = (uid) => {
     if (!uid) return '?'
     return uid === 'Admin' ? 'AD' : uid.replace('user_', '').toUpperCase().slice(0, 2)
   }
-
-  const unreadCount = notifications.filter((n) => !n.read && !n.dismissed).length
 
   return (
     <div className="app-wrapper">
 
       {/* ── Toast ─────────────────────────────────────────────────────── */}
       <div className="toast-container">
-        {toast && (
-          <Toast key={toast._toastId} toast={toast} onDismiss={dismissToast} />
-        )}
+        {toast && <Toast key={toast._toastId} toast={toast} onDismiss={dismissToast} />}
       </div>
 
       {/* ── Header ───────────────────────────────────────────────────── */}
@@ -442,9 +468,7 @@ export default function App() {
 
           {/* System Intelligence Card */}
           <div className="intel-card">
-            <div className="intel-card-title">
-              ⓘ System Intelligence
-            </div>
+            <div className="intel-card-title">ⓘ System Intelligence</div>
             {isAdmin ? (
               <ul>
                 <li>Broadcasts fire <code>POST /notify</code> for ALL users simultaneously</li>
@@ -456,6 +480,7 @@ export default function App() {
                 <li>Online users receive push delivery via WebSocket</li>
                 <li>Offline users are queued and flushed on reconnect</li>
                 <li>Urgent items trigger a 5-second aggressive toast</li>
+                <li>All requests authenticated with JWT (HS256)</li>
               </ul>
             )}
           </div>
