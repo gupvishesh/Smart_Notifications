@@ -197,9 +197,25 @@ async def websocket_endpoint(
             # Publish through broker so it goes through the dispatch loop
             await broker.publish(user_id, notification.model_dump())
 
-        # Keep connection alive — wait for client messages (ping/pong or close)
+        # Keep connection alive with a heartbeat ping every 25 s.
+        # Railway's proxy closes idle WebSockets after ~60 s of silence,
+        # so we must proactively send data in both directions.
+        PING_INTERVAL = 25  # seconds
         while True:
-            await websocket.receive_text()
+            try:
+                # Wait up to PING_INTERVAL seconds for a client message
+                data = await asyncio.wait_for(
+                    websocket.receive_text(),
+                    timeout=PING_INTERVAL,
+                )
+                # Client sent something (e.g. a pong reply) — ignore or handle
+                print(f"[WS] Received from {user_id}: {data}")
+            except asyncio.TimeoutError:
+                # No message received in time — send a ping to keep the proxy alive
+                try:
+                    await websocket.send_json({"type": "ping"})
+                except Exception:
+                    break  # Socket is dead; fall through to disconnect
 
     except WebSocketDisconnect:
         ws_manager.disconnect(user_id, websocket)

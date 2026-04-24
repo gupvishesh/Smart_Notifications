@@ -94,6 +94,8 @@ export function useWebSocket(userId, enabled, onMessage) {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
+        // Silently ignore server heartbeat pings
+        if (data?.type === 'ping') return
         onMessageRef.current(data)
       } catch (e) {
         console.error('[WS] Failed to parse message:', e)
